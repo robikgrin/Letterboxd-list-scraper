@@ -74,7 +74,7 @@ def repeated_request(url):
             time.sleep(wait_time)
             
             # Check for a 429 "Too Many Requests" error
-            if response.status_code == 200:
+            if response.status_code == 429:
                 current_delay = retry_seconds[retry_index]
                 print(f"Received 429 response. Retrying in {current_delay} seconds...")
                 time.sleep(current_delay)
