@@ -1,7 +1,6 @@
-from listscraper.utility_functions import val2stars, stars2val
+from listscraper.utility_functions import val2stars, stars2val, repeated_request
 from bs4 import BeautifulSoup
 from tqdm import tqdm
-import requests
 import numpy as np
 import re
 
@@ -70,7 +69,7 @@ def scrape_page(list_url, og_list_url, output_file_extension, list_type, quiet=F
     """
     
     page_films = []
-    page_response = requests.get(list_url)
+    page_response = repeated_request(list_url)
     
     # Check to see page was downloaded correctly
     if page_response.status_code != 200:
@@ -125,7 +124,7 @@ def scrape_film(film_html, not_found):
     # Obtaining release year, director and average rating of the movie
     film_card = film_html.find('div').get('data-target-link')[1:]
     film_url = _domain + film_card
-    filmget = requests.get(film_url)
+    filmget = repeated_request(film_url)
     film_soup = BeautifulSoup(filmget.content, 'html.parser')
 
     # Finding the film name
@@ -133,9 +132,9 @@ def scrape_film(film_html, not_found):
     
     # Try to find release year, handle cases where it's missing
     try:
-        release_years = film_soup.find_all('div', class_='releaseyear')
-        if len(release_years) > 1:  # Check if we have enough elements
-            year_text = release_years[1].find('a').text.strip()
+        release_years = film_soup.find_all('span', class_='releasedate')
+        if len(release_years) > 0:  # Check if we have enough elements
+            year_text = release_years[0].find('a').text.strip()
             release_year = int(year_text) if year_text else 0
         else:
             release_year = 0
@@ -234,26 +233,28 @@ def scrape_film(film_html, not_found):
 
     # Getting number of watches, appearances in lists and number of likes (requires new link) ## 
     movie = film_url.split('/')[-2]                                        # Movie title in URL
-    r = requests.get(f'https://letterboxd.com/csi/film/{movie}/stats/')    # Stats page of said movie
+    r = repeated_request(f'https://letterboxd.com/csi/film/{movie}/stats/')    # Stats page of said movie
     stats_soup = BeautifulSoup(r.content, 'lxml')
 
+    tooltips = stats_soup.find_all('a', {'class': 'tooltip'})
+
     # Get number of people that have watched the movie
-    watches = stats_soup.find('a', {'class': 'has-icon icon-watched icon-16 tooltip'})["title"]
+    watches = tooltips[0]["title"]
     watches = re.findall(r'\d+', watches)    # Find the number from string
     film_dict["Watches"] = int(''.join(watches))          # Filter out commas from large numbers
 
     # Get number of film appearances in lists
-    list_appearances = stats_soup.find('a', {'class': 'has-icon icon-list icon-16 tooltip'})["title"]
+    list_appearances = tooltips[1]["title"]
     list_appearances = re.findall(r'\d+', list_appearances) 
     film_dict["List_appearances"] = int(''.join(list_appearances))
 
     # Get number of people that have liked the movie
-    likes = stats_soup.find('a', {'class': 'has-icon icon-like icon-liked icon-16 tooltip'})["title"]
+    likes = tooltips[2]["title"]
     likes = re.findall(r'\d+', likes)
     film_dict["Likes"] = int(''.join(likes))
 
     # Getting info on rating histogram (requires new link)
-    r = requests.get(f'https://letterboxd.com/csi/film/{movie}/rating-histogram/')    # Rating histogram page of said movie
+    r = repeated_request(f'https://letterboxd.com/csi/film/{movie}/rating-histogram/')    # Rating histogram page of said movie
     hist_soup = BeautifulSoup(r.content, 'lxml')
 
     # Get number of fans. Amount is given in 'K' notation, so if relevant rounded off to full thousands
